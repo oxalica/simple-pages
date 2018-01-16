@@ -22,6 +22,7 @@
           title: '',
           pubtime: '',
           content: '',
+          rendered: '',
         },
       };
     },
@@ -29,17 +30,33 @@
 
   Vue.component('md-editor', {
     template: '#templ-md-editor',
-    props: ['value'],
+    props: {
+      'value': String,
+    },
     data: function() {
       return {
-        content: this.value,
+        renderedShown: '', // delayed show
       };
     },
     computed: {
-      rendered: function() {
-        return '';
-        throw undefined;
+      content: {
+        get: function() {
+          return this.value;
+        },
+        set: function(newContent) {
+          this.$emit('input', newContent);
+        },
       },
+      rendered: function() {
+        let r = marked(this.content);
+        this.$emit('update-rendered', r);
+        return r;
+      },
+    },
+    watch: {
+      rendered: _.debounce(function() {
+        this.renderedShown = this.rendered;
+      }, 500, { leading: true }),
     },
   });
 

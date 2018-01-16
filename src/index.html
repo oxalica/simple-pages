@@ -7,6 +7,8 @@
   <link rel="stylesheet" href="https://cdn.bootcss.com/bootstrap/3.3.7/css/bootstrap.css">
   <link rel="stylesheet" href="main.css">
   <script src="https://cdn.bootcss.com/vue/2.5.13/vue.js"></script>
+  <script src="https://cdn.bootcss.com/lodash.js/4.17.4/lodash.js"></script>
+  <script src="https://cdn.bootcss.com/marked/0.3.12/marked.js"></script>
 </head>
 
 <body>
@@ -124,6 +126,7 @@
           <md-editor
             class="full-height"
             v-model="curArticle.content"
+            @update-rendered="curArticle.rendered = arguments[0]"
           ></md-editor>
         </div>
       </div>
@@ -138,8 +141,7 @@
           v-model="content"
         ></textarea>
       </div>
-      <div class="col-xs-6 full-height md-preview">
-        {{ rendered }}
+      <div class="col-xs-6 full-height md-preview" v-html="renderedShown">
       </div>
     </div>
   </template>
