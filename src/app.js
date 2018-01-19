@@ -54,7 +54,7 @@
   Vue.component('mainPage', {
     template: '#templ-main-page',
     props: {
-      ghBlogIn: GhBlog,
+      ghBlogIn: { required: true, type: GhBlog },
     },
     data: function() {
       return {
@@ -120,9 +120,9 @@
   Vue.component('md-editor', {
     template: '#templ-md-editor',
     props: {
-      'value': String,
-      'readonly': Boolean,
-      'disabled': Boolean,
+      value: String,
+      readonly: Boolean,
+      disabled: Boolean,
     },
     data: function() {
       return {
