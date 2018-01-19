@@ -93,7 +93,7 @@ class GhBlog {
         return index;
       })
       .then(index => {
-        this.index = index;
+        this._index = index;
         return this;
       }, err => { // Fail with everything unchanged
         console.warn(err);
@@ -148,9 +148,9 @@ class GhBlog {
 
   readArticle(name) { // => Promise<Article | null>
     this._checkAvailable();
-    let brief = this.index.find(o => o.name === name);
+    let brief = this._index.find(o => o.name === name);
     if(brief === undefined)
-      return null;
+      return Promise.resolve(null);
     return this
       ._readFile(this.articlePrefix + name)
       .then(html => this._extractArticleSource(html))
@@ -177,14 +177,14 @@ class GhBlog {
           tags: article.tags.slice(), // clone
           renderedBrief: article.renderedBrief,
         };
-        let oldIdx = this.index.findIndex(o => o.name === article.name);
+        let oldIdx = this._index.findIndex(o => o.name === article.name);
         if(oldIdx !== -1)
-          this.index[oldIdx] = brief;
+          this._index[oldIdx] = brief;
         else
-          this.index.push(brief);
+          this._index.push(brief);
         this._writeFiles([{
           path: this.indexFile,
-          content: JSON.stringify(this.index),
+          content: JSON.stringify(this._index),
         }, {
           path: this.articlePrefix + article.name,
           content: html,
