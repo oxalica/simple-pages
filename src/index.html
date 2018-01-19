@@ -1,0 +1,190 @@
+<!DOCTYPE HTML>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <title>Simple Pages</title>
+  <link rel="stylesheet" href="https://cdn.bootcss.com/bootstrap/3.3.7/css/bootstrap.css">
+  <link rel="stylesheet" href="https://cdn.bootcss.com/icono/1.3.0/icono.min.css">
+  <link rel="stylesheet" href="main.css">
+  <script src="https://cdn.bootcss.com/vue/2.5.13/vue.js"></script>
+  <script src="https://cdn.bootcss.com/lodash.js/4.17.4/lodash.js"></script>
+  <script src="https://cdn.bootcss.com/marked/0.3.12/marked.js"></script>
+  <script src="https://cdn.bootcss.com/mustache.js/2.3.0/mustache.js"></script>
+  <script src="https://cdn.bootcss.com/github-api/3.0.0/GitHub.bundle.js"></script>
+  <script src="gh_blog.js"></script>
+</head>
+
+<body>
+  <div id="app">
+    <login-page v-if="ghBlog === null" @success="loginSuccess"></login-page>
+    <main-page v-else :gh-blog-in="ghBlog" class="full-viewport"></main-page>
+  </div>
+
+  <template id="templ-login-page">
+    <div class="panel panel-default login-panel">
+      <div class="panel-body">
+        <form>
+          <div class="form-group">
+            <label for="username">
+              Github username
+            </label>
+            <input
+              type="text"
+              id="username"
+              class="form-control"
+              v-model="username"
+              :readonly="logining"
+            >
+          </div>
+          <div class="form-group">
+            <label for="password">
+              Password
+            </label>
+            <input
+              type="password"
+              id="password"
+              class="form-control"
+              v-model="password"
+              :disabled="logining"
+            >
+          </div>
+          <div class="form-group">
+            <label for="repo">
+              Repository
+            </label>
+            <input
+              type="text"
+              id="repo"
+              class="form-control"
+              v-model="repo"
+              placeholder="example.github.io"
+              :readonly="logining"
+            >
+          </div>
+          <div class="form-group">
+            <label for="branch">
+              Branch
+            </label>
+            <input
+              type="text"
+              id="branch"
+              class="form-control"
+              v-model="branch"
+              :readonly="logining"
+            >
+          </div>
+          <button
+            type="submit"
+            class="btn btn-primary"
+            @click.prevent="login"
+            :disabled="logining"
+          >
+            Login
+          </button>
+          <span v-if="logining" class="icono-reset spin"></span>
+        </form>
+        <p>
+          <div v-if="errorMsg !== null" class="alert alert-danger" v-text="errorMsg"></div>
+        </p>
+      </div>
+    </div>
+  </template>
+
+  <template id="templ-main-page">
+    <div class="container-fluid">
+      <div class="row full-height">
+        <form class="col-xs-2 full-height">
+          <div class="form-group">
+            <label for="article-name">Filename</label>
+            <input
+              type="text"
+              class="form-control"
+              id="article-name"
+              v-model="curArticle.name"
+              placeholder="name.html"
+              :readonly="waiting"
+            >
+          </div>
+          <div class="form-group">
+            <label for="article-title">Title</label>
+            <input
+              type="text"
+              class="form-control"
+              id="article-title"
+              v-model="curArticle.title"
+              :readonly="waiting"
+            >
+          </div>
+          <div class="form-group">
+            <label for="article-pubtime">Publish Time</label>
+            <input
+              type="text"
+              class="form-control"
+              id="article-pubtime"
+              v-model="curArticle.isoPubtime"
+              :readonly="waiting"
+            >
+          </div>
+          <div class="form-group">
+            <label for="article-tags">Tags</label>
+            <input
+              type="text"
+              class="form-control"
+              id="article-tags"
+              v-model="curArticle.tags"
+              placeholder="tag1 tag2"
+              :readonly="waiting"
+            >
+          </div>
+          <button
+            type="button"
+            class="btn btn-default"
+            @click="loadArticle"
+            :disabled="waiting"
+          >
+            Reload
+          </button>
+          <button
+            type="button"
+            class="btn btn-primary"
+            @click="saveCurrentArticle"
+            :disabled="waiting"
+          >
+            Save
+          </button>
+          <span v-if="waiting" class="icono-reset spin"></span>
+          <p>
+            <div v-if="errorMsg !== null" class="alert alert-danger" v-text="errorMsg"></div>
+          </p>
+        </form>
+        <div class="col-xs-10 full-height">
+          <md-editor
+            class="full-height"
+            v-model="curArticle.source"
+            :readonly="waiting"
+          ></md-editor>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <template id="templ-md-editor">
+    <div class="row">
+      <div class="col-xs-6 full-height">
+        <textarea
+          class="full-height md-textarea"
+          v-model="source"
+          :disabled="disabled"
+          :readonly="readonly"
+        ></textarea>
+      </div>
+      <div class="col-xs-6 full-height md-preview" v-html="renderedShown">
+      </div>
+    </div>
+  </template>
+
+  <script src="app.js"></script>
+</body>
+
+</html>
