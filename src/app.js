@@ -63,13 +63,24 @@
           name: '',
           title: '',
           isoPubtime: '',
-          tags: '', // String
+          tags: [],
           source: '',
         },
         checkers: [],
         waiting: false,
         errorMsg: null,
       };
+    },
+    computed: {
+      strTags: {
+        get: function() {
+          return this.curArticle.tags.join(' ');
+        },
+        set: function(newVal) {
+          const s = newVal.trim();
+          this.curArticle.tags = (s ? s.split(/\s+/) : []);
+        },
+      },
     },
     methods: {
       addChecker: function(checker) {
@@ -83,34 +94,48 @@
         this.waiting = true;
         this.errorMsg = null;
 
-        let source = this.curArticle.source;
-        let match = /^([\s\S]*?)--+more--+([\s\S]*)$/.exec(source);
-        let article = Object.assign({}, this.curArticle);
-        article.tags = article.tags.split(/\s+/);
-        article.renderedBrief = match ? marked(match[1]) : '';
-        article.rendered = marked(match ? match[1] + match[2] : source);
-        this.ghBlog.writeArticle(article, 'Save')
+        if(!(this.curArticle instanceof Article)) {
+          this.curArticle = new Article(this.curArticle, true);
+          this.ghBlog.articles.unshift(this.curArticle);
+          console.log('New article added');
+        }
+        function marker(article) {
+          const source = article.source;
+          const match = /^([\s\S]*?)--+more--+([\s\S]*)$/.exec(source);
+          article.renderedBrief = match ? marked(match[1]) : '';
+          article.rendered = marked(match ? match[1] + match[2] : source);
+          return article;
+        }
+        this.ghBlog.saveArticles(marker, 'Save')
             .then(() => {
               this.waiting = false;
               window.alert('Saved!')
             })
             .catch(err => {
               this.waiting = false;
-              this.errorMsg = err;
+              console.error(err);
+              this.errorMsg = err.message;
             });
       },
       loadArticle: function() {
         if(this.waiting)
           throw new TypeError('Load when waiting');
+        if(this.curArticle.changed !== false && !confirm('Discard current states?'))
+          return;
+
+        const base = this.ghBlog.articles
+                         .find(o => o.name === this.curArticle.name);
+        if(base === undefined) {
+          this.errorMsg = 'Article not found';
+          return;
+        }
+
         this.waiting = true;
         this.errorMsg = null;
-        this.ghBlog.readArticle(this.curArticle.name)
-            .then(article => {
-              if(article === null)
-                throw new Error('Article not found');
-              article.tags = article.tags.join(' ');
-              this.curArticle = article;
-            })
+        if(this.curArticle instanceof Article)
+          this.curArticle.reset();
+        this.ghBlog.loadArticle(base)
+            .then(cur => this.curArticle = cur)
             .catch(err => this.errorMsg = err.message)
             .then(() => this.waiting = false);
       },
@@ -130,16 +155,8 @@
       };
     },
     computed: {
-      source: {
-        get: function() {
-          return this.value;
-        },
-        set: function(newSource) {
-          this.$emit('input', newSource);
-        },
-      },
       rendered: function() {
-        return marked(this.source);
+        return marked(this.value || '');
       },
     },
     watch: {

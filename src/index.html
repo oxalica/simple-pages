@@ -74,7 +74,7 @@
           ></labeled-input>
           <labeled-input
             id="article-tags" label="Tags" type="text"
-            v-model="curArticle.tags" :readonly="waiting" @checker="addChecker"
+            v-model="strTags" :readonly="waiting" @checker="addChecker"
           ></labeled-input>
           <button
             type="button" class="btn btn-default"
@@ -109,7 +109,8 @@
       <div class="col-xs-6 full-height">
         <textarea
           class="full-height md-textarea"
-          v-model="source" :disabled="disabled" :readonly="readonly"
+          :disabled="disabled" :readonly="readonly"
+          :value="value" @input="$emit('input', $event.target.value)"
         ></textarea>
       </div>
       <div class="col-xs-6 full-height md-preview" v-html="renderedShown">
