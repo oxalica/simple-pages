@@ -32,7 +32,15 @@
 */
 
 class Article {
-  constructor(o, defaultChanged) {
+  constructor(o) {
+    if(o === undefined)
+      o = {
+        name: '',
+        title: '',
+        isoPubtime: new Date().toISOString(),
+        tags: [],
+        source: '',
+      };
     Object.defineProperty(this, '_monitorProps', {
       enumerable: false,
       value: 'name,title,isoPubtime,tags,source'.split(','),
@@ -40,7 +48,7 @@ class Article {
     for(const p of 'name,title,isoPubtime,tags,source,rendered,renderedBrief,html'
                    .split(','))
       this[p] = o[p]; // pick or undefined
-    this.changed = defaultChanged;
+    this.changed = true;
   }
 
   get changed() {
@@ -61,9 +69,13 @@ class Article {
   }
 
   reset() {
-    if(this._last === undefined)
-      throw new TypeError('Cannot rollback');
+    if(!this.resetable)
+      throw new TypeError('Cannot reset');
     Object.assign(this, _.cloneDeep(this._last));
+  }
+
+  get resetable() {
+    return this._last !== undefined;
   }
 
   toBrief() {
@@ -124,7 +136,11 @@ class GhBlog {
       .then(cont => {
         try {
           this.articles = JSON.parse(cont)
-                              .map(o => new Article(o, false));
+                              .map(o => {
+                                const c = new Article(o);
+                                c.changed = false;
+                                return c;
+                              });
           return this;
         } catch(err) {
           throw new Error('Invalid index file');
@@ -185,8 +201,6 @@ class GhBlog {
     this._checkAvailable();
     if(articleBase.changed)
       throw new TypeError('Load to replace the modified article');
-    if(articleBase.source !== undefined)
-      return Promise.resolve(articleBase);
     return this
       ._readFile(this.articlePrefix + articleBase.name)
       .then(html => this._extractArticleSource(html))
@@ -195,6 +209,10 @@ class GhBlog {
         articleBase.changed = false;
         return articleBase;
       });
+  }
+
+  changedCount() {
+    return this.articles.filter(c => c.changed).length;
   }
 
   saveArticles(marker/* Marker */, commitMsg/* String */) { // => Promise<this>

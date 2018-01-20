@@ -59,46 +59,38 @@
     data: function() {
       return {
         ghBlog: this.ghBlogIn,
-        curArticle: {
-          name: '',
-          title: '',
-          isoPubtime: '',
-          tags: [],
-          source: '',
-        },
+        curArticle: null,
         checkers: [],
-        waiting: false,
-        errorMsg: null,
+        saving: false,
       };
-    },
-    computed: {
-      strTags: {
-        get: function() {
-          return this.curArticle.tags.join(' ');
-        },
-        set: function(newVal) {
-          const s = newVal.trim();
-          this.curArticle.tags = (s ? s.split(/\s+/) : []);
-        },
-      },
     },
     methods: {
       addChecker: function(checker) {
         this.checkers.push(checker);
       },
-      saveCurrentArticle: function() {
-        if(this.waiting)
-          throw new TypeError('Save when waiting');
-        if(!checkAll(this.checkers))
-          return;
-        this.waiting = true;
-        this.errorMsg = null;
+      newArticle: function() {
+        const article = new Article();
+        this.ghBlog.articles.unshift(article);
+        this.curArticle = article;
+      },
+      selectArticle: function(article) {
+        this.curArticle = article;
+        if(article.source === undefined)
+          this.ghBlog.loadArticle(article);
+      },
+      saveAll: function() {
+        if(this.saving)
+          throw new TypeError('Save when saving');
 
-        if(!(this.curArticle instanceof Article)) {
-          this.curArticle = new Article(this.curArticle, true);
-          this.ghBlog.articles.unshift(this.curArticle);
-          console.log('New article added');
-        }
+        const cnt = this.ghBlog.changedCount();
+        if(cnt === 0) {
+          window.alert('Nothing changed');
+          return;
+        } else if(!confirm(`Save ${cnt} articles?`))
+          return;
+
+        this.saving = true;
+
         function marker(article) {
           const source = article.source;
           const match = /^([\s\S]*?)--+more--+([\s\S]*)$/.exec(source);
@@ -108,36 +100,72 @@
         }
         this.ghBlog.saveArticles(marker, 'Save')
             .then(() => {
-              this.waiting = false;
+              this.saving = false;
               window.alert('Saved!')
             })
             .catch(err => {
-              this.waiting = false;
+              this.saving = false;
               console.error(err);
-              this.errorMsg = err.message;
+              window.alert('Failed! ' + err.message)
             });
       },
-      loadArticle: function() {
-        if(this.waiting)
-          throw new TypeError('Load when waiting');
-        if(this.curArticle.changed !== false && !confirm('Discard current states?'))
-          return;
+    },
+  });
 
-        const base = this.ghBlog.articles
-                         .find(o => o.name === this.curArticle.name);
-        if(base === undefined) {
-          this.errorMsg = 'Article not found';
-          return;
-        }
-
-        this.waiting = true;
-        this.errorMsg = null;
-        if(this.curArticle instanceof Article)
-          this.curArticle.reset();
-        this.ghBlog.loadArticle(base)
-            .then(cur => this.curArticle = cur)
-            .catch(err => this.errorMsg = err.message)
-            .then(() => this.waiting = false);
+  Vue.component('articleEditor', {
+    template: '#templ-article-editor',
+    props: {
+      article:  { default: null, validator: v => v === null || v instanceof Article },
+      readonly: { type: Boolean, default: false },
+      disabled: { type: Boolean, default: false },
+    },
+    computed: {
+      isDisabled: function() {
+        return this.disabled || !this.article;
+      },
+      sourceLoading: function() {
+        return this.article && this.article.source === undefined;
+      },
+      resetDisabled: function() {
+        return this.article && !this.article.resetable;
+      },
+      strTags: {
+        get: function() {
+          return this.article ? this.article.tags.join(' ') : '';
+        },
+        set: function(newVal) {
+          if(this.article) {
+            const s = newVal.trim();
+            this.article.tags = (s ? s.split(/\s+/) : []);
+          }
+        },
+      },
+      name: {
+        get: function() { return this.article ? this.article.name : ' '; },
+        set: function(newVal) { if(this.article) this.article.name = newVal; },
+      },
+      title: {
+        get: function() { return this.article ? this.article.title : ''; },
+        set: function(newVal) { if(this.article) this.article.title = newVal; },
+      },
+      isoPubtime: {
+        get: function() { return this.article ? this.article.isoPubtime : ''; },
+        set: function(newVal) { if(this.article) this.article.isoPubtime = newVal; },
+      },
+      source: {
+        get: function() { return this.article ? this.article.source : ''; },
+        set: function(newVal) { if(this.article) this.article.source = newVal; },
+      },
+    },
+    methods: {
+      reset: function() {
+        if(this.article && this.article.changed &&
+           confirm('Discard all modifications?'))
+          this.article.reset();
+      },
+      onInput: function(prop, value) {
+        if(this.article)
+          this.article[prop] = value;
       },
     },
   });

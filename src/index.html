@@ -59,47 +59,80 @@
   <template id="templ-main-page">
     <div class="container-fluid">
       <div class="row full-height">
-        <form class="col-xs-2 full-height">
-          <labeled-input
-            id="article-name" label="Filename" type="text" placeholder="name.html"
-            v-model="curArticle.name" :readonly="waiting" @checker="addChecker" nonempty
-          ></labeled-input>
-          <labeled-input
-            id="article-title" label="Title" type="text"
-            v-model="curArticle.title" :readonly="waiting" @checker="addChecker" nonempty
-          ></labeled-input>
-          <labeled-input
-            id="article-pubtime" label="Publish Time" type="text"
-            v-model="curArticle.isoPubtime" :readonly="waiting" @checker="addChecker" nonempty
-          ></labeled-input>
-          <labeled-input
-            id="article-tags" label="Tags" type="text"
-            v-model="strTags" :readonly="waiting" @checker="addChecker"
-          ></labeled-input>
-          <button
-            type="button" class="btn btn-default"
-            @click="loadArticle" :disabled="waiting"
-          >
-            Reload
-          </button>
-          <button
-            type="button" class="btn btn-primary"
-            @click="saveCurrentArticle" :disabled="waiting"
-          >
-            Save
-          </button>
-          <span v-if="waiting" class="fa fa-spinner fa-spin"></span>
-          <p>
-            <div v-if="errorMsg !== null" class="alert alert-danger" v-text="errorMsg"></div>
-          </p>
-        </form>
+        <nav class="col-xs-2 full-height article-nav">
+          <div class="nav-topbar">
+            <button
+              type="button" class="btn btn-default"
+              @click="newArticle" :disabled="saving"
+            >
+              <span class="fa fa-plus"></span>
+            </button>
+            <button
+              type="button" class="btn btn-primary"
+              @click="saveAll" :disabled="saving"
+            >
+              Save All
+              <span v-if="saving" class="fa fa-spinner fa-spin"></span>
+            </button>
+          </div>
+          <ul class="nav nav-pills nav-stacked">
+            <li
+              v-for="article in ghBlog.articles"
+              :class="{ active: article === curArticle }"
+            >
+              <a href="#" @click="selectArticle(article)">
+                {{ article.title + '&nbsp;' }}
+                <span v-if="article.changed" class="pull-right fa fa-pencil"></span>
+              </a>
+            </li>
+          </ul>
+        </nav>
         <div class="col-xs-10 full-height">
-          <md-editor
-            class="full-height"
-            v-model="curArticle.source"
-            :readonly="waiting"
-          ></md-editor>
+          <article-editor
+            class="full-height" :article="curArticle" :readonly="saving"
+          ></article-editor>
         </div>
+      </div>
+    </div>
+  </template>
+
+  <template id="templ-article-editor">
+    <div class="row">
+      <form class="col-xs-2 full-height">
+        <labeled-input
+          id="article-name" label="Filename" type="text" placeholder="name.html"
+          :readonly="readonly || sourceLoading" :disabled="isDisabled"
+          v-model="name"
+        ></labeled-input>
+        <labeled-input
+          id="article-title" label="Title" type="text"
+          :readonly="readonly || sourceLoading" :disabled="isDisabled"
+          v-model="title"
+        ></labeled-input>
+        <labeled-input
+          id="article-pubtime" label="Publish Time" type="text"
+          :readonly="readonly || sourceLoading" :disabled="isDisabled"
+          v-model="isoPubtime"
+        ></labeled-input>
+        <labeled-input
+          id="article-tags" label="Tags" type="text"
+          :readonly="readonly || sourceLoading" :disabled="isDisabled"
+          v-model="strTags"
+        ></labeled-input>
+        <button
+          type="button" class="btn btn-default"
+          :disabled="isDisabled || sourceLoading || resetDisabled" @click="reset"
+        >
+          Reset
+        </button>
+        <span v-if="sourceLoading" class="fa fa-spinner fa-spin"></span>
+      </form>
+      <div class="col-xs-10 full-height">
+        <md-editor
+          class="full-height"
+          :readonly="readonly" :disabled="isDisabled || sourceLoading"
+          v-model="source"
+        ></md-editor>
       </div>
     </div>
   </template>
@@ -109,8 +142,7 @@
       <div class="col-xs-6 full-height">
         <textarea
           class="full-height md-textarea"
-          :disabled="disabled" :readonly="readonly"
-          :value="value" @input="$emit('input', $event.target.value)"
+          v-bind="$props" @input="$emit('input', $event.target.value)"
         ></textarea>
       </div>
       <div class="col-xs-6 full-height md-preview" v-html="renderedShown">
