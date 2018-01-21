@@ -1,0 +1,133 @@
+a {
+  color: black;
+  text-decoration: underline;
+}
+
+.clear:after {
+  content: ".";
+  display: block;
+  height: 0;
+  clear: both;
+  visibility: hidden;
+}
+
+*html .clear {
+  height: 1%;
+}
+*+html .clear {
+  height: 1%;
+}
+
+.clear {
+  display: block;
+}
+
+body {
+  max-width: 691px;
+  margin-top: 20px;
+  margin-right: auto;
+  margin-left: auto;
+  padding-bottom: 100px;
+}
+
+@media only screen and (max-width: 767px) {
+  body {
+    width: 90%;
+  }
+}
+
+#site-title {
+  padding-bottom: 15px;
+}
+
+#site-title-main {
+  font-size: 40px;
+  border-bottom: 3px solid black;
+  font-weight: normal;
+  display: block;
+  margin: 0;
+  margin-bottom: 3px;
+}
+
+#site-title-main > a {
+  text-decoration: none;
+}
+
+#site-title-sub {
+  float: right;
+  margin-right: 3%;
+}
+
+.widget-header {
+  font-size: 30px;
+  border-bottom: 2px solid black;
+  padding-left: 5px;
+  margin-top: 30px;
+}
+
+.widget-list {
+  list-style-position: outside;
+  padding: 0;
+  margin-top: -2px;
+}
+
+.widget-list li {
+  display: block;
+  border-bottom: 1px dashed gray;
+  padding-left: 5px;
+}
+
+.widget-list li:hover {
+  background-color: #eeeeee;
+}
+
+.widget-item {
+  text-decoration: none;
+  display: block;
+  padding: 14px 18px 2px 2px;
+  position: relative;
+  font-size: 18px;
+  height: 22px;
+}
+
+.widget-item-main {
+  left: 0;
+  vertical-align: bottom;
+}
+
+.widget-item-aux {
+  position: absolute;
+  right: 2px;
+  vertical-align: bottom;
+}
+
+#post-title {
+  margin-top: 20px;
+}
+
+#post-title-main {
+  display: block;
+  margin: 0;
+  font-weight: normal;
+  font-size: 30px;
+  border-bottom: 2px solid black;
+  margin-bottom: 3px;
+}
+
+#post-title-sub {
+  display: inline;
+  color: gray;
+  float: right;
+  font-size: 20px;
+}
+
+pre {
+  background-color: #f8f8f8;
+  overflow-x: auto;
+  padding: 5px;
+}
+
+p > code {
+  background-color: #f8f8f8;
+  padding: 4px 10px;
+}

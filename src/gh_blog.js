@@ -125,7 +125,14 @@ class GhBlog {
           default:  throw err;
         }
       })
-      .then(ghb => ghb._tryLoad());
+      .then(ghb => {
+        return ghb
+          .reload()
+          .catch(err => { // Load fail. Leave everything unchanged
+            console.warn(err);
+            return ghb;
+          });
+      });
   }
 
   get available() { // => Boolean
@@ -137,7 +144,8 @@ class GhBlog {
       throw new TypeError('Unavailable method');
   }
 
-  _tryLoad() { // => Promise<this> (always success)
+  reload() { // => Promise<this>
+    this.articles = undefined;
     return this
       ._readFile(this.markerFile)
       .then(() => this._readFile(this.indexFile))
@@ -153,10 +161,6 @@ class GhBlog {
         } catch(err) {
           throw new Error('Invalid index file');
         }
-      })
-      .catch(err => { // Fail with everything unchanged
-        console.warn(err);
-        return this;
       });
   }
 

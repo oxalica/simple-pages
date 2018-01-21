@@ -1,0 +1,39 @@
+<!DOCTYPE HTML>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="utf-8">
+  <title>Simple Blog</title>
+  <link rel="stylesheet" href="../css.css">
+</head>
+
+<body>
+  <header id="site-title" class="clear">
+    <h1 id="site-title-main">
+      <a href="../index.html">
+        Simple Blog
+      </a>
+    </h1>
+    <div id="site-title-sub">
+      Powered by
+      <a href="https://github.com/uHOOCCOOHu/simple-pages">
+        simple-pages
+      </a>
+    </div>
+  </header>
+
+  <div id="post-title" class="clear">
+    <h2 id="post-title-main">{{title}}</h2>
+    <span id="post-title-sub">
+      {{#tags}}{{.}}&nbsp;{{/tags}}
+      <time id="pub-time" datetime="{{isoPubtime}}"></time>
+    </span>
+    <script>
+      let tm = document.getElementById('pub-time');
+      tm.innerHTML = new Date(tm.getAttribute('datetime')).toLocaleDateString();
+    </script>
+  </div>
+  {{&rendered}}
+</body>
+
+</html>

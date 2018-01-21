@@ -1,0 +1,62 @@
+<!DOCTYPE HTML>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="utf-8">
+  <title>Simple Blog</title>
+  <script src="https://cdn.bootcss.com/mustache.js/2.3.0/mustache.js"></script>
+  <link rel="stylesheet" href="css.css">
+</head>
+
+<body>
+  <header id="site-title" class="clear">
+    <h1 id="site-title-main">
+      <a href=".">
+        Simple Blog
+      </a>
+    </h1>
+    <div id="site-title-sub">
+      Powered by
+      <a href="https://github.com/uHOOCCOOHu/simple-pages">
+        simple-pages
+      </a>
+    </div>
+  </header>
+
+  <header class="widget-header">
+    Index
+  </header>
+  <section id="index-section">
+  </section>
+
+  <template id="templ-index">
+    <ul class="widget-list">
+      {{#briefs}}
+      <li class="clear">
+        <a class="widget-item" href="articles/{{name}}">
+          <span class="widget-item-main">{{title}}</span>
+          <span class="widget-item-aux">{{date}}</span>
+        </a>
+      </li>
+      {{/briefs}}
+    </ul>
+  </template>
+  <script>
+    const req = new XMLHttpRequest();
+    req.addEventListener("load", function() {
+      const obj = JSON.parse(this.responseText);
+      const briefs = obj.map(o => {
+        o.date = new Date(o.isoPubtime).toLocaleDateString();
+        return o;
+      });
+      const index = document.getElementById('index-section');
+      const templ = document.getElementById('templ-index').innerHTML;
+      index.innerHTML = Mustache.render(templ, { briefs });
+    });
+    req.overrideMimeType("text/plain; charset=utf-8");
+    req.open('GET', 'index.json');
+    req.send();
+  </script>
+</body>
+
+</html>

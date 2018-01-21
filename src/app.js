@@ -10,6 +10,13 @@
     },
     data: function() {
       return {
+        initFiles: [
+          'init/.simple-pages',
+          'init/index.json',
+          'init/article.templ',
+          'init/index.html',
+          'init/css.css',
+        ],
         saveKey: 'simplePagesLoginInfo',
         password: '',
         logining: false,
@@ -48,19 +55,43 @@
           repo: this.loginInfo.repo,
           branch: this.loginInfo.branch,
         };
-        GhBlog.load(loginCfg)
-              .then(ghBlog => {
-                if(!ghBlog.available)
-                  throw new Error('Not initialized by simple-pages');
-                this.saveLoginInfo();
-                this.$emit('success', ghBlog);
-              })
-              .catch(err => {
-                console.error(err);
-                this.errorMsg = `Failed!\n${err.message}`;
-                this.showErrorMsg = true;
-              })
-              .then(() => this.logining = false);
+        GhBlog
+          .load(loginCfg)
+          .then(ghb => ghb.available ? ghb : this.checkDoInit(ghb))
+          .then(ghb => {
+            if(ghb && ghb.available) {
+              this.saveLoginInfo();
+              this.$emit('success', ghb);
+            }
+          })
+          .catch(err => {
+            console.error(err);
+            this.errorMsg = `Failed!\n${err.message}`;
+            this.showErrorMsg = true;
+          })
+          .then(() => this.logining = false);
+      },
+      checkDoInit: function(ghb) {
+        if(!confirm('Not initialized by simple-pages! Init it now?\n' +
+                    'DANGER: may replace your existing files')) {
+          return undefined;
+        }
+        const reqs = this
+          .initFiles
+          .map(path => {
+            return this.$http
+              .get(path, { responseType: 'text' })
+              .then(response => ({
+                path: removeLeadingPath(path),
+                content: response.bodyText,
+              }));
+          });
+        return Promise.all(reqs)
+          .then(files => ghb.doInit(files))
+          .then(ghb => ghb.reload());
+        function removeLeadingPath(s) {
+          return s.slice(s.lastIndexOf('/') + 1);
+        }
       },
     },
   });
