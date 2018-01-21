@@ -1,9 +1,7 @@
 (function() {
   'use strict';
 
-  function checkAll(arr) {
-    return arr.reduce((st, f) => f() && st, true);
-  }
+  Vue.use(VeeValidate);
 
   Vue.component('loginPage', {
     template: '#templ-login-page',
@@ -13,7 +11,6 @@
         password: '',
         repo: '',
         branch: 'master',
-        checkers: [],
         logining: false,
 
         errorMsg: null,
@@ -21,14 +18,13 @@
       };
     },
     methods: {
-      addChecker: function(checker) {
-        this.checkers.push(checker);
+      onSubmit: function() {
+        this.$validator.validateAll()
+            .then(ret => ret && this.login());
       },
       login: function() {
         if(this.logining)
           throw new TypeError('Double login');
-        if(!checkAll(this.checkers))
-          return;
 
         this.logining = true;
         this.showErrorMsg = false;
@@ -64,7 +60,6 @@
       return {
         ghBlog: this.ghBlogIn,
         curArticle: null,
-        checkers: [],
         saving: false,
 
         errorMsg: null,
@@ -73,9 +68,6 @@
       };
     },
     methods: {
-      addChecker: function(checker) {
-        this.checkers.push(checker);
-      },
       newArticle: function() {
         const article = new Article();
         this.ghBlog.articles.unshift(article);
@@ -151,23 +143,26 @@
         },
       },
       name: {
-        get: function() { return this.article ? this.article.name : ' '; },
+        get: function() { this.revalidate(); return this.article ? this.article.name : ' '; },
         set: function(newVal) { if(this.article) this.article.name = newVal; },
       },
       title: {
-        get: function() { return this.article ? this.article.title : ''; },
+        get: function() { this.revalidate(); return this.article ? this.article.title : ''; },
         set: function(newVal) { if(this.article) this.article.title = newVal; },
       },
       isoPubtime: {
-        get: function() { return this.article ? this.article.isoPubtime : ''; },
+        get: function() { this.revalidate(); return this.article ? this.article.isoPubtime : ''; },
         set: function(newVal) { if(this.article) this.article.isoPubtime = newVal; },
       },
       source: {
-        get: function() { return this.article ? this.article.source : ''; },
+        get: function() { this.revalidate(); return this.article ? this.article.source : ''; },
         set: function(newVal) { if(this.article) this.article.source = newVal; },
       },
     },
     methods: {
+      revalidate: function() {
+        this.$nextTick(() => this.$validator.validateAll());
+      },
       reset: function() {
         if(this.article && this.article.changed &&
            confirm('Discard all modifications?'))
@@ -201,40 +196,6 @@
       rendered: _.debounce(function() {
         this.renderedShown = this.rendered;
       }, 500, { leading: true }),
-    },
-  });
-
-  Vue.component('labeled-input', {
-    template: '#templ-labeled-input',
-    props: {
-      id:    { required: true, type: String },
-      label: { required: true, type: String },
-      type:  { required: true, type: String },
-      placeholder: String,
-      value: String,
-      readonly: Boolean,
-      disabled: Boolean,
-      nonempty: Boolean,
-    },
-    data: function() {
-      return {
-        hasError: false,
-      };
-    },
-    created: function() {
-      if(this.nonempty)
-        this.$emit('checker', () => this.check());
-    },
-    watch: {
-      value: function() {
-        this.hasError = false;
-      },
-    },
-    methods: {
-      check: function() {
-        this.hasError = (this.nonempty && this.value === '');
-        return !this.hasError;
-      },
     },
   });
 
