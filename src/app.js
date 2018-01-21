@@ -192,7 +192,7 @@
       },
       reset: function() {
         if(this.article && this.article.changed &&
-           confirm('Discard all modifications?'))
+           confirm('Discard all modifications of this article?'))
           this.article.reset();
       },
       onInput: function(prop, value) {
