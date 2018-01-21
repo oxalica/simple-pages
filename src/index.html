@@ -146,7 +146,7 @@
           >
         </div>
         <div :class="['form-group', { 'has-error': errors.has('pubtime') }]">
-          <label class="control-label">Filename</label>
+          <label class="control-label">Publish time(ISO)</label>
           <input
             name="pubtime" type="text" class="form-control"
             :readonly="readonly || sourceLoading" :disabled="isDisabled"
