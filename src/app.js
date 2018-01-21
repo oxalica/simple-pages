@@ -1,48 +1,58 @@
 (function() {
   'use strict';
 
-  function checkAll(arr) {
-    return arr.reduce((st, f) => f() && st, true);
-  }
+  Vue.use(VeeValidate);
 
   Vue.component('loginPage', {
     template: '#templ-login-page',
+    props: {
+      loginInfo: { required: true },
+    },
     data: function() {
       return {
-        username: '',
+        saveKey: 'simplePagesLoginInfo',
         password: '',
-        repo: '',
-        branch: 'master',
-        checkers: [],
         logining: false,
 
         errorMsg: null,
         showErrorMsg: false,
       };
     },
+    mounted: function() {
+      const last = localStorage.getItem(this.saveKey);
+      if(last) {
+        Object.assign(this.loginInfo, JSON.parse(last));
+        this.$refs.password.focus();
+      } else {
+        this.$refs.username.focus();
+      }
+    },
     methods: {
-      addChecker: function(checker) {
-        this.checkers.push(checker);
+      saveLoginInfo: function() {
+        localStorage.setItem(this.saveKey, JSON.stringify(this.loginInfo));
+      },
+      onSubmit: function() {
+        this.$validator.validateAll()
+            .then(ret => ret && this.login());
       },
       login: function() {
         if(this.logining)
           throw new TypeError('Double login');
-        if(!checkAll(this.checkers))
-          return;
 
         this.logining = true;
         this.showErrorMsg = false;
 
         let loginCfg = {
-          username: this.username,
+          username: this.loginInfo.username,
           password: this.password,
-          repo: this.repo,
-          branch: this.branch,
+          repo: this.loginInfo.repo,
+          branch: this.loginInfo.branch,
         };
         GhBlog.load(loginCfg)
               .then(ghBlog => {
                 if(!ghBlog.available)
                   throw new Error('Not initialized by simple-pages');
+                this.saveLoginInfo();
                 this.$emit('success', ghBlog);
               })
               .catch(err => {
@@ -58,13 +68,13 @@
   Vue.component('mainPage', {
     template: '#templ-main-page',
     props: {
-      ghBlogIn: { required: true, type: GhBlog },
+      loginInfo: { default: undefined },
+      ghBlogIn:  { required: true, type: GhBlog },
     },
     data: function() {
       return {
         ghBlog: this.ghBlogIn,
         curArticle: null,
-        checkers: [],
         saving: false,
 
         errorMsg: null,
@@ -72,9 +82,74 @@
         showSaveMsg: false,
       };
     },
+    computed: {
+      saveKey: function() {
+        if(this.loginInfo === undefined)
+          return undefined;
+        return 'simplePagesModifiedArticles|' +
+               encodeURI(this.loginInfo.username) + '|' +
+               encodeURI(this.loginInfo.repo) + '|' +
+               encodeURI(this.loginInfo.branch);
+      },
+    },
+    mounted: function() {
+      if(this.saveKey === undefined)
+        return;
+      const savedObj = JSON.parse(localStorage.getItem(this.saveKey) || '[]');
+      if(savedObj.length && confirm('Recover the last unsaved articles?')) {
+        const notFounds = this.loadLocal(savedObj);
+        if(notFounds > 0)
+          this.$nextTick(() => {
+            window.alert(
+              `Cannot find bases of ${notFounds} recovered articles. ` +
+              'They are marked as new articles now.'
+            );
+          });
+      }
+      this.$watch(
+        'ghBlog.articles',
+        _.throttle(() => this.saveLocal(), 3000),
+        { deep: true },
+      );
+    },
     methods: {
-      addChecker: function(checker) {
-        this.checkers.push(checker);
+      saveLocal: function() {
+        const s = JSON.stringify(this.getModifiedArticles(), (k, v) => {
+          if(v instanceof Article) {
+            const min = v.toMinimal();
+            if(v.resetable)
+              min.oldName = v.getOld().name;
+            return min;
+          } else
+            return v;
+        });
+        localStorage.setItem(this.saveKey, s);
+      },
+      loadLocal: function(savedObj) {
+        const articles = this.ghBlog.articles;
+        let baseNotFound = 0;
+        savedObj
+          .reverse() // unshift in reverse order
+          .forEach(o => {
+            const cur = new Article(o);
+            if(o.oldName !== undefined) {
+              const base = articles.find(t => t.name === o.oldName);
+              if(base !== undefined) {
+                this.ghBlog.loadArticle(base) // Load the source first, or reset
+                    .then(() => Object.assign(base, cur));     // will be broken
+              } else {
+                baseNotFound++;
+                articles.unshift(cur);
+              }
+            } else
+              articles.unshift(cur);
+          });
+        return baseNotFound;
+      },
+      checkInfo: function(article) {
+        return article.name !== '' &&
+               article.title !== '' &&
+               article.isoPubtime !== '';
       },
       newArticle: function() {
         const article = new Article();
@@ -91,11 +166,17 @@
           throw new TypeError('Save when saving');
         this.closeMsgs();
 
-        const cnt = this.ghBlog.changedCount();
-        if(cnt === 0) {
+        const modifieds = this.getModifiedArticles();
+        const modifiedCnt = modifieds.length;
+        const orzed = modifieds.find(o => !this.checkInfo(o));
+        if(orzed !== undefined) {
+          this.curArticle = orzed;
+          window.alert('Missing some required properties');
+          return;
+        } else if(modifiedCnt === 0) {
           window.alert('Nothing changed');
           return;
-        } else if(!confirm(`Save ${cnt} articles?`))
+        } else if(!confirm(`Save ${modifiedCnt} articles?`))
           return;
 
         this.saving = true;
@@ -118,6 +199,9 @@
       },
       closeMsgs: function() {
         this.showErrorMsg = this.showSaveMsg = false;
+      },
+      getModifiedArticles: function() {
+        return this.ghBlog.articles.filter(o => o.changed);;
       },
     },
   });
@@ -151,26 +235,29 @@
         },
       },
       name: {
-        get: function() { return this.article ? this.article.name : ' '; },
+        get: function() { this.revalidate(); return this.article ? this.article.name : ' '; },
         set: function(newVal) { if(this.article) this.article.name = newVal; },
       },
       title: {
-        get: function() { return this.article ? this.article.title : ''; },
+        get: function() { this.revalidate(); return this.article ? this.article.title : ''; },
         set: function(newVal) { if(this.article) this.article.title = newVal; },
       },
       isoPubtime: {
-        get: function() { return this.article ? this.article.isoPubtime : ''; },
+        get: function() { this.revalidate(); return this.article ? this.article.isoPubtime : ''; },
         set: function(newVal) { if(this.article) this.article.isoPubtime = newVal; },
       },
       source: {
-        get: function() { return this.article ? this.article.source : ''; },
+        get: function() { this.revalidate(); return this.article ? this.article.source : ''; },
         set: function(newVal) { if(this.article) this.article.source = newVal; },
       },
     },
     methods: {
+      revalidate: function() {
+        this.$nextTick(() => this.$validator.validateAll());
+      },
       reset: function() {
         if(this.article && this.article.changed &&
-           confirm('Discard all modifications?'))
+           confirm('Discard all modifications of this article?'))
           this.article.reset();
       },
       onInput: function(prop, value) {
@@ -201,40 +288,6 @@
       rendered: _.debounce(function() {
         this.renderedShown = this.rendered;
       }, 500, { leading: true }),
-    },
-  });
-
-  Vue.component('labeled-input', {
-    template: '#templ-labeled-input',
-    props: {
-      id:    { required: true, type: String },
-      label: { required: true, type: String },
-      type:  { required: true, type: String },
-      placeholder: String,
-      value: String,
-      readonly: Boolean,
-      disabled: Boolean,
-      nonempty: Boolean,
-    },
-    data: function() {
-      return {
-        hasError: false,
-      };
-    },
-    created: function() {
-      if(this.nonempty)
-        this.$emit('checker', () => this.check());
-    },
-    watch: {
-      value: function() {
-        this.hasError = false;
-      },
-    },
-    methods: {
-      check: function() {
-        this.hasError = (this.nonempty && this.value === '');
-        return !this.hasError;
-      },
     },
   });
 
@@ -278,6 +331,11 @@
     el: '#app',
     data: {
       ghBlog: null,
+      loginInfo: {
+        username: '',
+        repo: '',
+        branch: 'master',
+      },
     },
     methods: {
       loginSuccess: function(ghBlog) {

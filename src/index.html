@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="https://cdn.bootcss.com/font-awesome/4.7.0/css/font-awesome.css">
   <link rel="stylesheet" href="main.css">
   <script src="https://cdn.bootcss.com/vue/2.5.13/vue.js"></script>
+  <script src="https://cdn.bootcss.com/vee-validate/2.0.3/vee-validate.js"></script>
   <script src="https://cdn.bootcss.com/lodash.js/4.17.4/lodash.js"></script>
   <script src="https://cdn.bootcss.com/marked/0.3.12/marked.js"></script>
   <script src="https://cdn.bootcss.com/mustache.js/2.3.0/mustache.js"></script>
@@ -17,34 +18,51 @@
 
 <body>
   <div id="app">
-    <login-page v-if="ghBlog === null" @success="loginSuccess"></login-page>
-    <main-page v-else :gh-blog-in="ghBlog" class="full-viewport"></main-page>
+    <login-page
+      v-if="ghBlog === null"
+      :login-info.sync="loginInfo" @success="loginSuccess"
+    ></login-page>
+    <main-page
+      v-else class="full-viewport"
+      :login-info.sync="loginInfo" :gh-blog-in="ghBlog"
+    ></main-page>
   </div>
 
   <template id="templ-login-page">
     <div class="panel panel-default login-panel">
       <div class="panel-body">
-        <form>
-          <labeled-input
-            id="login-username" label="Github username" type="text"
-            v-model="username" :readonly="logining" @checker="addChecker" nonempty
-          ></labeled-input>
-          <labeled-input
-            id="login-password" label="Password" type="password"
-            v-model="password" :readonly="logining" @checker="addChecker" nonempty
-          ></labeled-input>
-          <labeled-input
-            id="login-repo" label="Repository" type="text" placeholder="example.github.io"
-            v-model="repo" :readonly="logining" @checker="addChecker" nonempty
-          ></labeled-input>
-          <labeled-input
-            id="login-branch" label="Branch" type="text"
-            v-model="branch" :readonly="logining" @checker="addChecker" nonempty
-          ></labeled-input>
-          <button
-            type="submit" class="btn btn-primary"
-            @click.prevent="login" :disabled="logining"
-          >
+        <form @submit.prevent="onSubmit">
+          <div :class="['form-group', { 'has-error': errors.has('username') }]">
+            <label class="control-label">
+              Github Username
+            </label>
+            <input
+              name="username" type="text" class="form-control" ref="username"
+              v-model="loginInfo.username" v-validate="'required'" :readonly="logining"
+            >
+          </div>
+          <div :class="['form-group', { 'has-error': errors.has('password') }]">
+            <label class="control-label">Password</label>
+            <input
+              name="password" type="password" class="form-control" ref="password"
+              v-model="password" v-validate="'required'" :readonly="logining"
+            >
+          </div>
+          <div :class="['form-group', { 'has-error': errors.has('repo') }]">
+            <label class="control-label">Repository</label>
+            <input
+              name="repo" type="text" class="form-control"
+              v-model="loginInfo.repo" v-validate="'required'" :readonly="logining"
+            >
+          </div>
+          <div :class="['form-group', { 'has-error': errors.has('branch') }]">
+            <label class="control-label">Branch</label>
+            <input
+              name="branch" type="text" class="form-control"
+              v-model="loginInfo.branch" v-validate="'required'" :readonly="logining"
+            >
+          </div>
+          <button type="submit" class="btn btn-primary" :disabled="logining">
             Login
             <span v-if="logining" class="fa fa-spinner fa-spin"></span>
           </button>
@@ -87,6 +105,11 @@
               <a href="#" @click="selectArticle(article)">
                 {{ article.title + '&nbsp;' }}
                 <span v-if="article.changed" class="pull-right fa fa-pencil"></span>
+                <span v-if="!article.resetable" class="pull-right fa fa-asterisk"></span>
+                <span
+                  v-if="!checkInfo(article)"
+                  class="pull-right fa fa-exclamation-triangle"
+                ></span>
               </a>
             </li>
           </ul>
@@ -116,30 +139,42 @@
 
   <template id="templ-article-editor">
     <div class="row">
-      <form class="col-xs-2 full-height">
-        <labeled-input
-          id="article-name" label="Filename" type="text" placeholder="name.html"
-          :readonly="readonly || sourceLoading" :disabled="isDisabled"
-          v-model="name"
-        ></labeled-input>
-        <labeled-input
-          id="article-title" label="Title" type="text"
-          :readonly="readonly || sourceLoading" :disabled="isDisabled"
-          v-model="title"
-        ></labeled-input>
-        <labeled-input
-          id="article-pubtime" label="Publish Time" type="text"
-          :readonly="readonly || sourceLoading" :disabled="isDisabled"
-          v-model="isoPubtime"
-        ></labeled-input>
-        <labeled-input
-          id="article-tags" label="Tags" type="text"
-          :readonly="readonly || sourceLoading" :disabled="isDisabled"
-          v-model="strTags"
-        ></labeled-input>
+      <form class="col-xs-2 full-height" @reset.prevent="reset">
+        <div :class="['form-group', { 'has-error': errors.has('name') }]">
+          <label class="control-label">Filename</label>
+          <input
+            name="name" type="text" class="form-control"
+            :readonly="readonly || sourceLoading" :disabled="isDisabled"
+            v-model="name" v-validate="'required'"
+          >
+        </div>
+        <div :class="['form-group', { 'has-error': errors.has('title') }]">
+          <label class="control-label">Title</label>
+          <input
+            name="title" type="text" class="form-control"
+            :readonly="readonly || sourceLoading" :disabled="isDisabled"
+            v-model="title" v-validate="'required'"
+          >
+        </div>
+        <div :class="['form-group', { 'has-error': errors.has('pubtime') }]">
+          <label class="control-label">Publish time(ISO)</label>
+          <input
+            name="pubtime" type="text" class="form-control"
+            :readonly="readonly || sourceLoading" :disabled="isDisabled"
+            v-model="isoPubtime" v-validate="'required'"
+          >
+        </div>
+        <div :class="['form-group', { 'has-error': errors.has('tags') }]">
+          <label class="control-label">Tags</label>
+          <input
+            name="tags" type="text" class="form-control"
+            :readonly="readonly || sourceLoading" :disabled="isDisabled"
+            v-model="strTags"
+          >
+        </div>
         <button
-          type="button" class="btn btn-default"
-          :disabled="isDisabled || sourceLoading || resetDisabled" @click="reset"
+          type="reset" class="btn btn-default"
+          :disabled="isDisabled || sourceLoading || resetDisabled"
         >
           Reset
         </button>
@@ -165,16 +200,6 @@
       </div>
       <div class="col-xs-6 full-height md-preview" v-html="renderedShown">
       </div>
-    </div>
-  </template>
-
-  <template id="templ-labeled-input">
-    <div :class="['form-group', { 'has-error': hasError }]">
-      <label class="control-label" :for="id" v-text="label"></label>
-      <input
-        class="form-control"
-        v-bind="$props" @blur="check" @input="$emit('input', $event.target.value)"
-      >
     </div>
   </template>
 
