@@ -99,6 +99,11 @@
               <a href="#" @click="selectArticle(article)">
                 {{ article.title + '&nbsp;' }}
                 <span v-if="article.changed" class="pull-right fa fa-pencil"></span>
+                <span v-if="!article.resetable" class="pull-right fa fa-asterisk"></span>
+                <span
+                  v-if="!checkInfo(article)"
+                  class="pull-right fa fa-exclamation-triangle"
+                ></span>
               </a>
             </li>
           </ul>

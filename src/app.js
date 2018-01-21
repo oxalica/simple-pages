@@ -84,6 +84,11 @@
       };
     },
     methods: {
+      checkInfo: function(article) {
+        return article.name !== '' &&
+               article.title !== '' &&
+               article.isoPubtime !== '';
+      },
       newArticle: function() {
         const article = new Article();
         this.ghBlog.articles.unshift(article);
@@ -99,11 +104,17 @@
           throw new TypeError('Save when saving');
         this.closeMsgs();
 
-        const cnt = this.ghBlog.changedCount();
-        if(cnt === 0) {
+        const changeds = this.ghBlog.articles.filter(o => o.changed);
+        const changedCnt = changeds.length;
+        const orzed = changeds.find(o => !this.checkInfo(o));
+        if(orzed !== undefined) {
+          this.curArticle = orzed;
+          window.alert('Missing some required properties');
+          return;
+        } else if(changedCnt === 0) {
           window.alert('Nothing changed');
           return;
-        } else if(!confirm(`Save ${cnt} articles?`))
+        } else if(!confirm(`Save ${changedCnt} articles?`))
           return;
 
         this.saving = true;
