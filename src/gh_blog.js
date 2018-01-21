@@ -5,31 +5,83 @@
     repo: String,
     branch: String,
   }
-  Article: {
-    name: String,
-    title: String,
-    isoPubtime: String,
-    tags: [String],
-    source: String,
+  ArticleRenderedHtml: {
+    ..ArticleRendered,
+    html,
   }
   ArticleRendered: {
-    renderedBrief: String,
+    ..ArticleSource,
     rendered: String,
-    ..Article
+    renderedBrief: String,
   }
-  ArticleBrief: {
+  ArticleSource: {
+    ..ArticleBase,
+    source: String,
+  }
+  ArticleBase: {
     name: String,
     title: String,
     isoPubtime: String,
     tags: [String],
-    renderedBrief: String,
   }
-  Index: [ArticleBrief]
+  Marker: (s: ArticleSource) => (s: ArticleRendered)
   File: {
     path: String,
     content: String,
   }
 */
+
+class Article {
+  constructor(o) {
+    if(o === undefined)
+      o = {
+        name: '',
+        title: '',
+        isoPubtime: new Date().toISOString(),
+        tags: [],
+        source: '',
+      };
+    Object.defineProperty(this, '_monitorProps', {
+      enumerable: false,
+      value: 'name,title,isoPubtime,tags,source'.split(','),
+    });
+    for(const p of 'name,title,isoPubtime,tags,source,rendered,renderedBrief,html'
+                   .split(','))
+      this[p] = o[p]; // pick or undefined
+    this.changed = true;
+  }
+
+  get changed() {
+    if(this._last === undefined)
+      return true;
+    for(const p of this._monitorProps)
+      if(!_.isEqual(this[p], this._last[p])) // may be Array
+        return true;
+    return false;
+  }
+
+  set changed(newVal) {
+    Object.defineProperty(this, '_last', {
+      configurable: true,
+      enumerable: false,
+      value: newVal ? undefined : _.cloneDeep(_.pick(this, this._monitorProps)),
+    });
+  }
+
+  reset() {
+    if(!this.resetable)
+      throw new TypeError('Cannot reset');
+    Object.assign(this, _.cloneDeep(this._last));
+  }
+
+  get resetable() {
+    return this._last !== undefined;
+  }
+
+  toBrief() {
+    return _.pick(this, 'name,title,isoPubtime,tags,renderedBrief'.split(','));
+  }
+}
 
 class GhBlog {
   constructor(repo, branch, commitResponse) {
@@ -42,7 +94,7 @@ class GhBlog {
     this._headCommitSha = commitResponse.commit.sha;
     this._headTreeSha = commitResponse.commit.commit.tree.sha;
     this._articleTempl = undefined;
-    this._index = undefined; // Index
+    this.articles = undefined; /* [ArticleBase] */
   }
 
   static load(loginCfg/* LoginCfg */) { // => Promise<GhBlog>
@@ -69,7 +121,7 @@ class GhBlog {
   }
 
   get available() { // => Boolean
-    return this._index !== undefined;
+    return this.articles !== undefined;
   }
 
   _checkAvailable() {
@@ -77,25 +129,24 @@ class GhBlog {
       throw new TypeError('Unavailable method');
   }
 
-  get index() { // => Index
-    this._checkAvailable();
-    return this._index;
-  }
-
   _tryLoad() { // => Promise<this> (always success)
     return this
       ._readFile(this.markerFile)
       .then(() => this._readFile(this.indexFile))
       .then(cont => {
-        let index = JSON.parse(cont);
-        if(!(index instanceof Array))
+        try {
+          this.articles = JSON.parse(cont)
+                              .map(o => {
+                                const c = new Article(o);
+                                c.changed = false;
+                                return c;
+                              });
+          return this;
+        } catch(err) {
           throw new Error('Invalid index file');
-        return index;
+        }
       })
-      .then(index => {
-        this._index = index;
-        return this;
-      }, err => { // Fail with everything unchanged
+      .catch(err => { // Fail with everything unchanged
         console.warn(err);
         return this;
       });
@@ -146,57 +197,71 @@ class GhBlog {
       });
   }
 
-  readArticle(name) { // => Promise<Article | null>
+  loadArticle(articleBase/* ArticleBase */) { // => Promise<articleBase: ArticleSource>
     this._checkAvailable();
-    let brief = this._index.find(o => o.name === name);
-    if(brief === undefined)
-      return Promise.resolve(null);
+    if(articleBase.changed)
+      throw new TypeError('Load to replace the modified article');
     return this
-      ._readFile(this.articlePrefix + name)
+      ._readFile(this.articlePrefix + articleBase.name)
       .then(html => this._extractArticleSource(html))
       .then(source => {
-        return {
-          name,
-          title: brief.title,
-          isoPubtime: brief.isoPubtime,
-          tags: brief.tags.slice(), // clone
-          source,
-        };
+        articleBase.source = source;
+        articleBase.changed = false;
+        return articleBase;
       });
   }
 
-  writeArticle(article/* ArticleRendered */, commitMsg) { // => Promise<this>
-    this._checkAvailable();
-    return this
-      ._renderArticleHtml(article)
-      .then(html => {
-        let brief = {
-          name: article.name,
-          title: article.title,
-          isoPubtime: article.isoPubtime,
-          tags: article.tags.slice(), // clone
-          renderedBrief: article.renderedBrief,
-        };
-        let oldIdx = this._index.findIndex(o => o.name === article.name);
-        if(oldIdx !== -1)
-          this._index[oldIdx] = brief;
-        else
-          this._index.push(brief);
-        this._writeFiles([{
-          path: this.indexFile,
-          content: JSON.stringify(this._index),
-        }, {
-          path: this.articlePrefix + article.name,
-          content: html,
-        }], commitMsg);
-      })
+  changedCount() {
+    return this.articles.filter(c => c.changed).length;
   }
 
-  _renderArticleHtml(article/* ArticleRendered */) { // => Promise<String>
+  saveArticles(marker/* Marker */, commitMsg/* String */) { // => Promise<this>
+    this._checkAvailable();
+    const articles = this.articles.filter(c => c.changed);
+    if(articles.length === 0)
+      return Promise.resolve(this);
+    return this
+      ._renderArticleHtmls(articles, marker)
+      .then(articles => { // articles: [ArticleRenderedHtml]
+        let files = articles.map(cur => {
+          return {
+            path: this.articlePrefix + cur.name,
+            content: cur.html,
+          };
+        });
+        files.push({
+          path: this.indexFile,
+          content: this._getJSONIndex(),
+        });
+        return this
+          ._writeFiles(files, commitMsg)
+          .then(() => {
+            articles.forEach(c => c.changed = false);
+            return this;
+          });
+      });
+  }
+
+  _getJSONIndex() {
+    return JSON.stringify(this.articles, (k, v) => {
+      return v instanceof Article ? v.toBrief() : v;
+    });
+  }
+
+  _renderArticleHtmls(articleSources/* [ArticleSource] */,
+                      marker/* Marker */
+                     ) { // => Promise<articleSources: [ArticleRenderedHtml]>
     return Promise.resolve()
       .then(() => this._articleTempl || this._readFile(this.articleTemplFile))
-      .then(templ => `<!-- SOURCE<${window.btoa(article.source)}> -->` +
-                      Mustache.render(templ, article))
+      .then(templ => {
+        this._articleTempl = templ;
+        articleSources.forEach(c => {
+          marker(c);
+          c.html = `<!-- SOURCE<${window.btoa(c.source)}> -->` +
+                   Mustache.render(templ, c);
+        });
+        return articleSources;
+      });
   }
 
   _extractArticleSource(html) { // => Promise<String>

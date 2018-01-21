@@ -15,7 +15,9 @@
         branch: 'master',
         checkers: [],
         logining: false,
+
         errorMsg: null,
+        showErrorMsg: false,
       };
     },
     methods: {
@@ -27,8 +29,9 @@
           throw new TypeError('Double login');
         if(!checkAll(this.checkers))
           return;
+
         this.logining = true;
-        this.errorMsg = null;
+        this.showErrorMsg = false;
 
         let loginCfg = {
           username: this.username,
@@ -43,8 +46,9 @@
                 this.$emit('success', ghBlog);
               })
               .catch(err => {
-                this.errorMsg = err.message;
                 console.error(err);
+                this.errorMsg = `Failed!\n${err.message}`;
+                this.showErrorMsg = true;
               })
               .then(() => this.logining = false);
       },
@@ -59,60 +63,119 @@
     data: function() {
       return {
         ghBlog: this.ghBlogIn,
-        curArticle: {
-          name: '',
-          title: '',
-          isoPubtime: '',
-          tags: '', // String
-          source: '',
-        },
+        curArticle: null,
         checkers: [],
-        waiting: false,
+        saving: false,
+
         errorMsg: null,
+        showErrorMsg: false,
+        showSaveMsg: false,
       };
     },
     methods: {
       addChecker: function(checker) {
         this.checkers.push(checker);
       },
-      saveCurrentArticle: function() {
-        if(this.waiting)
-          throw new TypeError('Save when waiting');
-        if(!checkAll(this.checkers))
-          return;
-        this.waiting = true;
-        this.errorMsg = null;
-
-        let source = this.curArticle.source;
-        let match = /^([\s\S]*?)--+more--+([\s\S]*)$/.exec(source);
-        let article = Object.assign({}, this.curArticle);
-        article.tags = article.tags.split(/\s+/);
-        article.renderedBrief = match ? marked(match[1]) : '';
-        article.rendered = marked(match ? match[1] + match[2] : source);
-        this.ghBlog.writeArticle(article, 'Save')
-            .then(() => {
-              this.waiting = false;
-              window.alert('Saved!')
-            })
-            .catch(err => {
-              this.waiting = false;
-              this.errorMsg = err;
-            });
+      newArticle: function() {
+        const article = new Article();
+        this.ghBlog.articles.unshift(article);
+        this.curArticle = article;
       },
-      loadArticle: function() {
-        if(this.waiting)
-          throw new TypeError('Load when waiting');
-        this.waiting = true;
-        this.errorMsg = null;
-        this.ghBlog.readArticle(this.curArticle.name)
-            .then(article => {
-              if(article === null)
-                throw new Error('Article not found');
-              article.tags = article.tags.join(' ');
-              this.curArticle = article;
+      selectArticle: function(article) {
+        this.curArticle = article;
+        if(article.source === undefined)
+          this.ghBlog.loadArticle(article);
+      },
+      saveAll: function() {
+        if(this.saving)
+          throw new TypeError('Save when saving');
+        this.closeMsgs();
+
+        const cnt = this.ghBlog.changedCount();
+        if(cnt === 0) {
+          window.alert('Nothing changed');
+          return;
+        } else if(!confirm(`Save ${cnt} articles?`))
+          return;
+
+        this.saving = true;
+
+        function marker(article) {
+          const source = article.source;
+          const match = /^([\s\S]*?)--+more--+([\s\S]*)$/.exec(source);
+          article.renderedBrief = match ? marked(match[1]) : '';
+          article.rendered = marked(match ? match[1] + match[2] : source);
+          return article;
+        }
+        this.ghBlog.saveArticles(marker, 'Save')
+            .then(() => this.showSaveMsg = true)
+            .catch(err => {
+              console.error(err);
+              this.errorMsg = `Failed!\n${err.message}`;
+              this.showErrorMsg = true;
             })
-            .catch(err => this.errorMsg = err.message)
-            .then(() => this.waiting = false);
+            .then(() => this.saving = false);
+      },
+      closeMsgs: function() {
+        this.showErrorMsg = this.showSaveMsg = false;
+      },
+    },
+  });
+
+  Vue.component('articleEditor', {
+    template: '#templ-article-editor',
+    props: {
+      article:  { default: null, validator: v => v === null || v instanceof Article },
+      readonly: { type: Boolean, default: false },
+      disabled: { type: Boolean, default: false },
+    },
+    computed: {
+      isDisabled: function() {
+        return this.disabled || !this.article;
+      },
+      sourceLoading: function() {
+        return this.article && this.article.source === undefined;
+      },
+      resetDisabled: function() {
+        return this.article && !this.article.resetable;
+      },
+      strTags: {
+        get: function() {
+          return this.article ? this.article.tags.join(' ') : '';
+        },
+        set: function(newVal) {
+          if(this.article) {
+            const s = newVal.trim();
+            this.article.tags = (s ? s.split(/\s+/) : []);
+          }
+        },
+      },
+      name: {
+        get: function() { return this.article ? this.article.name : ' '; },
+        set: function(newVal) { if(this.article) this.article.name = newVal; },
+      },
+      title: {
+        get: function() { return this.article ? this.article.title : ''; },
+        set: function(newVal) { if(this.article) this.article.title = newVal; },
+      },
+      isoPubtime: {
+        get: function() { return this.article ? this.article.isoPubtime : ''; },
+        set: function(newVal) { if(this.article) this.article.isoPubtime = newVal; },
+      },
+      source: {
+        get: function() { return this.article ? this.article.source : ''; },
+        set: function(newVal) { if(this.article) this.article.source = newVal; },
+      },
+    },
+    methods: {
+      reset: function() {
+        if(this.article && this.article.changed &&
+           confirm('Discard all modifications?'))
+          this.article.reset();
+      },
+      onInput: function(prop, value) {
+        if(this.article)
+          this.article[prop] = value;
       },
     },
   });
@@ -130,16 +193,8 @@
       };
     },
     computed: {
-      source: {
-        get: function() {
-          return this.value;
-        },
-        set: function(newSource) {
-          this.$emit('input', newSource);
-        },
-      },
       rendered: function() {
-        return marked(this.source);
+        return marked(this.value || '');
       },
     },
     watch: {
@@ -179,6 +234,42 @@
       check: function() {
         this.hasError = (this.nonempty && this.value === '');
         return !this.hasError;
+      },
+    },
+  });
+
+  Vue.component('float-alert', {
+    template: '#templ-float-alert',
+    props: {
+      show:     { type: Boolean, default: true },
+      closable: { type: Boolean, default: false },
+      duration: { type: Number,  default: 0 },
+      width:    { type: String,  required: true },
+    },
+    data: function() {
+      return {
+        timerID: undefined,
+      };
+    },
+    methods: {
+      close: function() {
+        this.removeTimer();
+        this.$emit('update:show', false);
+      },
+      removeTimer: function() {
+        clearTimeout(this.timerID);
+        this.timerID = undefined;
+      },
+    },
+    watch: {
+      show: {
+        handler: function(newVal) {
+          if(!newVal)
+            this.removeTimer();
+          else if(this.duration > 0)
+            this.timerID = setTimeout(() => this.close(), this.duration);
+        },
+        immediate: true,
       },
     },
   });

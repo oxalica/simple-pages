@@ -13,6 +13,15 @@
   height: 100%;
 }
 
+.nav-topbar {
+  margin: .5em;
+}
+
+.article-nav {
+  overflow-y: auto;
+  background-color: #f8f8f8;
+}
+
 .md-textarea {
   width: 100%;
   resize: none;
@@ -22,4 +31,16 @@
 
 .md-preview {
   overflow-y: auto;
+}
+
+.float-alert {
+  position: fixed;
+  top: 1.5em;
+  right: 1.5em;
+  z-index: 9;
+  transition: all .2s ease;
+}
+
+.float-alert-inner-margin {
+  margin-right: 1em;
 }
