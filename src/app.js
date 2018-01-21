@@ -15,7 +15,9 @@
         branch: 'master',
         checkers: [],
         logining: false,
+
         errorMsg: null,
+        showErrorMsg: false,
       };
     },
     methods: {
@@ -27,8 +29,9 @@
           throw new TypeError('Double login');
         if(!checkAll(this.checkers))
           return;
+
         this.logining = true;
-        this.errorMsg = null;
+        this.showErrorMsg = false;
 
         let loginCfg = {
           username: this.username,
@@ -43,8 +46,9 @@
                 this.$emit('success', ghBlog);
               })
               .catch(err => {
-                this.errorMsg = err.message;
                 console.error(err);
+                this.errorMsg = `Failed!\n${err.message}`;
+                this.showErrorMsg = true;
               })
               .then(() => this.logining = false);
       },
@@ -62,6 +66,10 @@
         curArticle: null,
         checkers: [],
         saving: false,
+
+        errorMsg: null,
+        showErrorMsg: false,
+        showSaveMsg: false,
       };
     },
     methods: {
@@ -81,6 +89,7 @@
       saveAll: function() {
         if(this.saving)
           throw new TypeError('Save when saving');
+        this.closeMsgs();
 
         const cnt = this.ghBlog.changedCount();
         if(cnt === 0) {
@@ -99,15 +108,16 @@
           return article;
         }
         this.ghBlog.saveArticles(marker, 'Save')
-            .then(() => {
-              this.saving = false;
-              window.alert('Saved!')
-            })
+            .then(() => this.showSaveMsg = true)
             .catch(err => {
-              this.saving = false;
               console.error(err);
-              window.alert('Failed! ' + err.message)
-            });
+              this.errorMsg = `Failed!\n${err.message}`;
+              this.showErrorMsg = true;
+            })
+            .then(() => this.saving = false);
+      },
+      closeMsgs: function() {
+        this.showErrorMsg = this.showSaveMsg = false;
       },
     },
   });
@@ -224,6 +234,42 @@
       check: function() {
         this.hasError = (this.nonempty && this.value === '');
         return !this.hasError;
+      },
+    },
+  });
+
+  Vue.component('float-alert', {
+    template: '#templ-float-alert',
+    props: {
+      show:     { type: Boolean, default: true },
+      closable: { type: Boolean, default: false },
+      duration: { type: Number,  default: 0 },
+      width:    { type: String,  required: true },
+    },
+    data: function() {
+      return {
+        timerID: undefined,
+      };
+    },
+    methods: {
+      close: function() {
+        this.removeTimer();
+        this.$emit('update:show', false);
+      },
+      removeTimer: function() {
+        clearTimeout(this.timerID);
+        this.timerID = undefined;
+      },
+    },
+    watch: {
+      show: {
+        handler: function(newVal) {
+          if(!newVal)
+            this.removeTimer();
+          else if(this.duration > 0)
+            this.timerID = setTimeout(() => this.close(), this.duration);
+        },
+        immediate: true,
       },
     },
   });

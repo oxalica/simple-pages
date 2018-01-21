@@ -49,9 +49,13 @@
             <span v-if="logining" class="fa fa-spinner fa-spin"></span>
           </button>
         </form>
-        <p>
-          <div v-if="errorMsg !== null" class="alert alert-danger" v-text="errorMsg"></div>
-        </p>
+        <float-alert
+          class="alert-danger" width="25%"
+          :show.sync="showErrorMsg" closable
+        >
+          <span class="fa fa-times-circle"></span>
+          {{ errorMsg }}
+        </float-alert>
       </div>
     </div>
   </template>
@@ -93,6 +97,20 @@
           ></article-editor>
         </div>
       </div>
+      <float-alert
+        class="alert-success" width="25%"
+        :show.sync="showSaveMsg" :duration="2000" closable
+      >
+        <span class="fa fa-info-circle"></span>
+        Saved
+      </float-alert>
+      <float-alert
+        class="alert-danger" width="25%"
+        :show.sync="showErrorMsg" closable
+      >
+        <span class="fa fa-times-circle"></span>
+        {{ errorMsg }}
+      </float-alert>
     </div>
   </template>
 
@@ -157,6 +175,17 @@
         class="form-control"
         v-bind="$props" @blur="check" @input="$emit('input', $event.target.value)"
       >
+    </div>
+  </template>
+
+  <template id="templ-float-alert">
+    <div class="alert float-alert" :style="{ width, right: show ? '' : '-' + width }">
+      <a v-if="closable" href="#" class="alert-link" @click="closable && close()">
+        <span class="fa fa-times pull-right"></span>
+      </a>
+      <div :class="['float-alert-inner', {'float-alert-inner-margin': closable }]">
+        <slot></slot>
+      </div>
     </div>
   </template>
 
