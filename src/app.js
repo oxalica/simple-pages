@@ -7,17 +7,32 @@
     template: '#templ-login-page',
     data: function() {
       return {
-        username: '',
+        saveKey: 'simplePagesLoginInfo',
+        saved: {
+          username: '',
+          repo: '',
+          branch: 'master',
+        },
         password: '',
-        repo: '',
-        branch: 'master',
         logining: false,
 
         errorMsg: null,
         showErrorMsg: false,
       };
     },
+    mounted: function() {
+      const last = localStorage.getItem(this.saveKey);
+      if(last) {
+        this.saved = JSON.parse(last);
+        this.$refs.password.focus();
+      } else {
+        this.$refs.username.focus();
+      }
+    },
     methods: {
+      saveLoginInfo: function() {
+        localStorage.setItem(this.saveKey, JSON.stringify(this.saved));
+      },
       onSubmit: function() {
         this.$validator.validateAll()
             .then(ret => ret && this.login());
@@ -30,15 +45,16 @@
         this.showErrorMsg = false;
 
         let loginCfg = {
-          username: this.username,
+          username: this.saved.username,
           password: this.password,
-          repo: this.repo,
-          branch: this.branch,
+          repo: this.saved.repo,
+          branch: this.saved.branch,
         };
         GhBlog.load(loginCfg)
               .then(ghBlog => {
                 if(!ghBlog.available)
                   throw new Error('Not initialized by simple-pages');
+                this.saveLoginInfo();
                 this.$emit('success', ghBlog);
               })
               .catch(err => {

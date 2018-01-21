@@ -31,14 +31,14 @@
               Github Username
             </label>
             <input
-              name="username" type="text" class="form-control"
-              v-model="username" v-validate="'required'" :readonly="logining"
+              name="username" type="text" class="form-control" ref="username"
+              v-model="saved.username" v-validate="'required'" :readonly="logining"
             >
           </div>
           <div :class="['form-group', { 'has-error': errors.has('password') }]">
             <label class="control-label">Password</label>
             <input
-              name="password" type="password" class="form-control"
+              name="password" type="password" class="form-control" ref="password"
               v-model="password" v-validate="'required'" :readonly="logining"
             >
           </div>
@@ -46,14 +46,14 @@
             <label class="control-label">Repository</label>
             <input
               name="repo" type="text" class="form-control"
-              v-model="repo" v-validate="'required'" :readonly="logining"
+              v-model="saved.repo" v-validate="'required'" :readonly="logining"
             >
           </div>
           <div :class="['form-group', { 'has-error': errors.has('branch') }]">
             <label class="control-label">Branch</label>
             <input
               name="branch" type="text" class="form-control"
-              v-model="branch" v-validate="'required'" :readonly="logining"
+              v-model="saved.branch" v-validate="'required'" :readonly="logining"
             >
           </div>
           <button type="submit" class="btn btn-primary" :disabled="logining">
