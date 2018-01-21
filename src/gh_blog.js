@@ -51,6 +51,10 @@ class Article {
     this.changed = true;
   }
 
+  getOld() {
+    return this._last;
+  }
+
   get changed() {
     if(this._last === undefined)
       return true;
@@ -80,6 +84,10 @@ class Article {
 
   toBrief() {
     return _.pick(this, 'name,title,isoPubtime,tags,renderedBrief'.split(','));
+  }
+
+  toMinimal() {
+    return _.pick(this, 'name,title,isoPubtime,tags,source'.split(','));
   }
 }
 
