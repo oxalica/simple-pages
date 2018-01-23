@@ -5,26 +5,19 @@
     repo: String,
     branch: String,
   }
-  ArticleRenderedHtml: {
-    ..ArticleRendered,
-    html,
-  }
-  ArticleRendered: {
-    ..ArticleSource,
-    rendered: String,
-    renderedBrief: String,
-  }
-  ArticleSource: {
-    ..ArticleBase,
-    source: String,
-  }
-  ArticleBase: {
+  Article: {
     name: String,
     title: String,
     isoPubtime: String,
     tags: [String],
+    source: String | undefined,
   }
-  Marker: (s: ArticleSource) => (s: ArticleRendered)
+  Brief: { renderedBrief: String }
+  Source: { source: String }
+  ArticlePatch: ArticleMonitored & Brief
+  Rendered: Brief & { rendered: String }
+  Html: { html: String }
+  Marker: <T>(T & Article & Source) => T & Article & Source & Rendered
   File: {
     path: String,
     content: String,
@@ -32,62 +25,70 @@
 */
 
 class Article {
-  constructor(o) {
-    if(o === undefined)
-      o = {
-        name: '',
-        title: '',
-        isoPubtime: new Date().toISOString(),
-        tags: [],
-        source: '',
-      };
-    Object.defineProperty(this, '_monitorProps', {
+  constructor(o, stripProps) {
+    const def = {
+      name: '',
+      title: '',
+      isoPubtime: new Date().toISOString(),
+      tags: [],
+      source: undefined,
+    };
+    Object.defineProperty(this, '_baseProps', {
+      configurable: false,
       enumerable: false,
-      value: 'name,title,isoPubtime,tags,source'.split(','),
+      writable: false,
+      value: Object.keys(def),
     });
-    for(const p of 'name,title,isoPubtime,tags,source,rendered,renderedBrief,html'
-                   .split(','))
-      this[p] = o[p]; // pick or undefined
-    this.changed = true;
+    if(stripProps)
+      o = _.pick(o, Object.keys(def));
+    Object.assign(this, def, o);
   }
 
-  getOld() {
-    return this._last;
+  getBase() {
+    return _.pick(this, this._baseProps);
   }
+}
 
-  get changed() {
-    if(this._last === undefined)
-      return true;
-    for(const p of this._monitorProps)
-      if(!_.isEqual(this[p], this._last[p])) // may be Array
-        return true;
-    return false;
-  }
-
-  set changed(newVal) {
-    Object.defineProperty(this, '_last', {
-      configurable: true,
+class MonitoredArticle extends Article {
+  constructor(o, saved) {
+    super(o);
+    Object.defineProperty(this, 'lastVersion', {
+      configurable: false,
       enumerable: false,
-      value: newVal ? undefined : _.cloneDeep(_.pick(this, this._monitorProps)),
+      writable: true,
+      value: undefined,
     });
+    this.lastVersion = undefined;
+    if(saved)
+      this.saveCurrent();
   }
 
-  reset() {
-    if(!this.resetable)
-      throw new TypeError('Cannot reset');
-    Object.assign(this, _.cloneDeep(this._last));
+  get modified() {
+    return !this.lastVersion ||
+           !_.isEqual(_.pick(this, this._baseProps),
+                      this.lastVersion);
   }
 
-  get resetable() {
-    return this._last !== undefined;
+  saveCurrent(prop) {
+    this.lastVersion = _.cloneDeep(_.pick(this, this._baseProps));
   }
 
-  toBrief() {
+  saveCurrentProp(prop) {
+    if(this._baseProps.indexOf(prop) === -1)
+      throw new TypeError('Invalid monitored property');
+    if(!this.lastVersion)
+      throw new TypeError('No saved version');
+    this.lastVersion[prop] = _.cloneDeep(this[prop]);
+  }
+
+  recover() {
+    if(!this.lastVersion)
+      throw new TypeError('No saved version');
+    Object.assign(this, _.cloneDeep(this.lastVersion));
+  }
+
+  getBrief() {
     return _.pick(this, 'name,title,isoPubtime,tags,renderedBrief'.split(','));
-  }
-
-  toMinimal() {
-    return _.pick(this, 'name,title,isoPubtime,tags,source'.split(','));
   }
 }
 
@@ -102,7 +103,7 @@ class GhBlog {
     this._headCommitSha = commitResponse.commit.sha;
     this._headTreeSha = commitResponse.commit.commit.tree.sha;
     this._articleTempl = undefined;
-    this.articles = undefined; /* [ArticleBase] */
+    this._articleIndex = undefined; /* [Article & Brief] */
   }
 
   static load(loginCfg/* LoginCfg */) { // => Promise<GhBlog>
@@ -135,8 +136,8 @@ class GhBlog {
       });
   }
 
-  get available() { // => Boolean
-    return this.articles !== undefined;
+  get available() {
+    return this._articleIndex !== undefined;
   }
 
   _checkAvailable() {
@@ -144,19 +145,20 @@ class GhBlog {
       throw new TypeError('Unavailable method');
   }
 
+  getIndexMonitored() {
+    this._checkAvailable();
+    return this._articleIndex.map(o => new MonitoredArticle(o, true));
+  }
+
   reload() { // => Promise<this>
-    this.articles = undefined;
+    this._articleIndex = undefined;
     return this
       ._readFile(this.markerFile)
       .then(() => this._readFile(this.indexFile))
       .then(cont => {
         try {
-          this.articles = JSON.parse(cont)
-                              .map(o => {
-                                const c = new Article(o);
-                                c.changed = false;
-                                return c;
-                              });
+          this._articleIndex = JSON.parse(cont)
+                                   .map(o => new Article(o));
           return this;
         } catch(err) {
           throw new Error('Invalid index file');
@@ -209,70 +211,64 @@ class GhBlog {
       });
   }
 
-  loadArticle(articleBase/* ArticleBase */) { // => Promise<articleBase: ArticleSource>
+  loadArticle/*<T>*/(article/* T & Article */) { // => Promise<T & Article & Source>
     this._checkAvailable();
-    if(articleBase.changed)
-      throw new TypeError('Load to replace the modified article');
     return this
-      ._readFile(this.articlePrefix + articleBase.name)
+      ._readFile(this.articlePrefix + article.name)
       .then(html => this._extractArticleSource(html))
       .then(source => {
-        articleBase.source = source;
-        articleBase.changed = false;
-        return articleBase;
+        article.source = source;
+        return article;
       });
   }
 
-  changedCount() {
-    return this.articles.filter(c => c.changed).length;
-  }
-
-  saveArticles(marker/* Marker */, commitMsg/* String */) { // => Promise<this>
+  saveArticles(allArticles/* [ArticlePatch] */,
+               marker/* Marker */,
+               commitMsg/* String */
+              ) { // => Promise<this>
     this._checkAvailable();
-    const articles = this.articles.filter(c => c.changed);
-    if(articles.length === 0)
-      return Promise.resolve(this);
+    const modifieds = allArticles.filter(c => c.modified);
     return this
-      ._renderArticleHtmls(articles, marker)
-      .then(articles => { // articles: [ArticleRenderedHtml]
-        let files = articles.map(cur => {
-          return {
-            path: this.articlePrefix + cur.name,
-            content: cur.html,
-          };
-        });
+      ._renderArticleHtmls(modifieds, marker)
+      .then(modifieds/* [ArticlePatch & Html] */ => {
+        let files = modifieds.map(cur => ({
+          path: this.articlePrefix + cur.name,
+          content: cur.html,
+        }));
         files.push({
           path: this.indexFile,
-          content: this._getJSONIndex(),
+          content: JSON.stringify(
+            allArticles,
+            (k, v) => v instanceof Article ? v.getBrief() : v,
+          ),
         });
         return this
           ._writeFiles(files, commitMsg)
           .then(() => {
-            articles.forEach(c => c.changed = false);
+            this._articleIndex =
+              allArticles.map(c => {
+                const nc = new Article(c, true);
+                nc.renderedBrief = c.renderedBrief;
+                return nc;
+              });
             return this;
           });
       });
   }
 
-  _getJSONIndex() {
-    return JSON.stringify(this.articles, (k, v) => {
-      return v instanceof Article ? v.toBrief() : v;
-    });
-  }
-
-  _renderArticleHtmls(articleSources/* [ArticleSource] */,
-                      marker/* Marker */
-                     ) { // => Promise<articleSources: [ArticleRenderedHtml]>
+  _renderArticleHtmls/*<T>*/(articles/* [T & Article & Source] */,
+                             marker/* Marker */
+                            ) { // => Promise<[T & Article & Source & Html]>
     return Promise.resolve()
       .then(() => this._articleTempl || this._readFile(this.articleTemplFile))
       .then(templ => {
         this._articleTempl = templ;
-        articleSources.forEach(c => {
+        articles.forEach(c => {
           marker(c);
           c.html = `<!-- SOURCE<${window.btoa(c.source)}> -->` +
                    Mustache.render(templ, c);
         });
-        return articleSources;
+        return articles;
       });
   }
 
