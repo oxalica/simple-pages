@@ -93,7 +93,7 @@ class Article {
 
 class GhBlog {
   constructor(repo, branch, commitResponse) {
-    this.markerFile = '.simple-pages';
+    this.markerFile = 'simple-pages.init';
     this.indexFile = 'index.json';
     this.articleTemplFile = 'article.templ';
     this.articlePrefix = 'articles/';

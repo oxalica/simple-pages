@@ -11,7 +11,7 @@
     data: function() {
       return {
         initFiles: [
-          'init/.simple-pages',
+          'init/simple-pages.init',
           'init/index.json',
           'init/article.templ',
           'init/index.html',
@@ -84,7 +84,10 @@
               .then(response => ({
                 path: removeLeadingPath(path),
                 content: response.bodyText,
-              }));
+              }))
+              .catch(err => {
+                throw new Error('Cannot load initial templates');
+              });
           });
         return Promise.all(reqs)
           .then(files => ghb.doInit(files))
