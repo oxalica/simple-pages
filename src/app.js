@@ -106,9 +106,11 @@
       ghBlogIn:  { required: true, type: GhBlog },
     },
     data: function() {
+      const curIndex = this.ghBlogIn.getIndexMonitored();
+      curIndex.forEach(o => o.removed = false);
       return {
         ghBlog: this.ghBlogIn,
-        curIndex: this.ghBlogIn.getIndexMonitored(),
+        curIndex,
         curArticle: null,
         saving: false,
 
@@ -157,6 +159,7 @@
         const s = JSON.stringify(this.getModifiedArticles(), (k, v) => {
           if(v instanceof Article) {
             const min = v.getBase();
+            min.removed = v.removed;
             if(v.lastVersion)
               min.oldName = v.lastVersion.name;
             return min;
@@ -194,7 +197,7 @@
                article.isoPubtime !== '';
       },
       newArticle: function() {
-        const article = new MonitoredArticle({ source: '' });
+        const article = new MonitoredArticle({ source: '', removed: false });
         this.curIndex.unshift(article);
         this.curArticle = article;
       },
@@ -203,6 +206,15 @@
         if(article.source === undefined) {
           this.ghBlog.loadArticle(article)
               .then(article => article.saveCurrentProp('source'));
+        }
+      },
+      onRemove: function(article) {
+        if(!article.lastVersion) {
+          if(confirm('Remove the newly created article immediately?')) {
+            this.curIndex = this.curIndex.filter(c => c !== article);
+            this.curArticle = null;
+          } else
+            article.removed = false;
         }
       },
       saveAll: function() {
@@ -232,10 +244,12 @@
           article.rendered = marked(match ? match[1] + match[2] : source);
           return article;
         }
+        const newIndex = this.curIndex.filter(c => !c.removed);
         this.ghBlog.saveArticles(this.curIndex, marker, 'Save')
             .then(() => {
               this.showSaveMsg = true;
-              this.curIndex.forEach(c => c.saveCurrent());
+              newIndex.forEach(c => c.saveCurrent());
+              this.curIndex = newIndex;
               this.saveLocal();
             })
             .catch(err => {
@@ -249,7 +263,7 @@
         this.showErrorMsg = this.showSaveMsg = false;
       },
       getModifiedArticles: function() {
-        return this.curIndex.filter(o => o.modified);
+        return this.curIndex.filter(o => o.removed || o.modified);
       },
     },
   });
@@ -304,9 +318,19 @@
         this.$nextTick(() => this.$validator.validateAll());
       },
       reset: function() {
-        if(this.article && this.article.modified &&
-           confirm('Discard all modifications of this article?'))
-          this.article.recover();
+        if(this.article) {
+          if(this.article.modified &&
+            confirm('Discard all modifications of this article?'))
+            this.article.recover();
+          else if(this.article.removed)
+            this.article.removed = false;
+        }
+      },
+      remove: function() {
+        if(this.article) {
+          this.article.removed = true;
+          this.$emit('remove', this.article);
+        }
       },
       onInput: function(prop, value) {
         if(this.article)

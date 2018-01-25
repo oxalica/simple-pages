@@ -103,10 +103,18 @@
               v-for="article in curIndex"
               :class="{ active: article === curArticle }"
             >
-              <a href="#" @click="selectArticle(article)">
-                {{ article.title + '&nbsp;' }}
-                <span v-if="article.modified" class="pull-right fa fa-pencil"></span>
-                <span v-if="!article.lastVersion" class="pull-right fa fa-asterisk"></span>
+              <a href="#" @click="selectArticle(article)"
+                :class="{ 'removed-mark': article.removed }"
+              >
+                {{ article.title || '&nbps;' }}
+                <span
+                  v-if="article.removed || article.modified"
+                  class="pull-right fa fa-pencil"
+                ></span>
+                <span
+                  v-if="!article.lastVersion"
+                  class="pull-right fa fa-asterisk"
+                ></span>
                 <span
                   v-if="!checkInfo(article)"
                   class="pull-right fa fa-exclamation-triangle"
@@ -118,6 +126,7 @@
         <div class="col-xs-10 full-height">
           <article-editor
             class="full-height" :article="curArticle" :readonly="saving"
+            @remove="onRemove"
           ></article-editor>
         </div>
       </div>
@@ -178,6 +187,12 @@
           :disabled="isDisabled || sourceLoading || resetDisabled"
         >
           Reset
+        </button>
+        <button
+          type="button" class="btn btn-danger"
+          :disabled="isDisabled" @click="remove"
+        >
+          Delete
         </button>
         <span v-if="sourceLoading" class="fa fa-spinner fa-spin"></span>
       </form>

@@ -14,7 +14,9 @@
   }
   Brief: { renderedBrief: String }
   Source: { source: String }
-  ArticlePatch: ArticleMonitored & Brief
+  ArticlePatch extends ArticleMonitored & Brief {
+    removed: boolean,
+  }
   Rendered: Brief & { rendered: String }
   Html: { html: String }
   Marker: <T>(T & Article & Source) => T & Article & Source & Rendered
