@@ -106,8 +106,11 @@
       ghBlogIn:  { required: true, type: GhBlog },
     },
     data: function() {
+      const curIndex = this.ghBlogIn.getIndexMonitored();
+      curIndex.forEach(o => o.removed = false);
       return {
         ghBlog: this.ghBlogIn,
+        curIndex,
         curArticle: null,
         saving: false,
 
@@ -140,19 +143,25 @@
             );
           });
       }
-      this.$watch(
-        'ghBlog.articles',
-        _.throttle(() => this.saveLocal(), 3000),
-        { deep: true },
-      );
+    },
+    watch: {
+      curIndex: {
+        handler: _.throttle(function() {
+          this.saveLocal();
+        }, 3000),
+        deep: true,
+      },
     },
     methods: {
       saveLocal: function() {
+        if(!this.saveKey)
+          return;
         const s = JSON.stringify(this.getModifiedArticles(), (k, v) => {
           if(v instanceof Article) {
-            const min = v.toMinimal();
-            if(v.resetable)
-              min.oldName = v.getOld().name;
+            const min = v.getBase();
+            min.removed = v.removed;
+            if(v.lastVersion)
+              min.oldName = v.lastVersion.name;
             return min;
           } else
             return v;
@@ -160,23 +169,25 @@
         localStorage.setItem(this.saveKey, s);
       },
       loadLocal: function(savedObj) {
-        const articles = this.ghBlog.articles;
         let baseNotFound = 0;
         savedObj
           .reverse() // unshift in reverse order
           .forEach(o => {
-            const cur = new Article(o);
+            const cur = new MonitoredArticle(o);
             if(o.oldName !== undefined) {
-              const base = articles.find(t => t.name === o.oldName);
+              const base = this.curIndex.find(t => t.name === o.oldName);
               if(base !== undefined) {
-                this.ghBlog.loadArticle(base) // Load the source first, or reset
-                    .then(() => Object.assign(base, cur));     // will be broken
+                this.ghBlog.loadArticle(base) // Load the source first, or recovering
+                    .then(() => {        // will be broken
+                      base.saveCurrentProp('source');
+                      Object.assign(base, cur);
+                    });
               } else {
                 baseNotFound++;
-                articles.unshift(cur);
+                this.curIndex.unshift(cur);
               }
             } else
-              articles.unshift(cur);
+              this.curIndex.unshift(cur);
           });
         return baseNotFound;
       },
@@ -186,14 +197,25 @@
                article.isoPubtime !== '';
       },
       newArticle: function() {
-        const article = new Article();
-        this.ghBlog.articles.unshift(article);
+        const article = new MonitoredArticle({ source: '', removed: false });
+        this.curIndex.unshift(article);
         this.curArticle = article;
       },
       selectArticle: function(article) {
         this.curArticle = article;
-        if(article.source === undefined)
-          this.ghBlog.loadArticle(article);
+        if(article.source === undefined) {
+          this.ghBlog.loadArticle(article)
+              .then(article => article.saveCurrentProp('source'));
+        }
+      },
+      onRemove: function(article) {
+        if(!article.lastVersion) {
+          if(confirm('Remove the newly created article immediately?')) {
+            this.curIndex = this.curIndex.filter(c => c !== article);
+            this.curArticle = null;
+          } else
+            article.removed = false;
+        }
       },
       saveAll: function() {
         if(this.saving)
@@ -222,8 +244,14 @@
           article.rendered = marked(match ? match[1] + match[2] : source);
           return article;
         }
-        this.ghBlog.saveArticles(marker, 'Save')
-            .then(() => this.showSaveMsg = true)
+        const newIndex = this.curIndex.filter(c => !c.removed);
+        this.ghBlog.saveArticles(this.curIndex, marker, 'Save')
+            .then(() => {
+              this.showSaveMsg = true;
+              newIndex.forEach(c => c.saveCurrent());
+              this.curIndex = newIndex;
+              this.saveLocal();
+            })
             .catch(err => {
               console.error(err);
               this.errorMsg = `Failed!\n${err.message}`;
@@ -235,7 +263,7 @@
         this.showErrorMsg = this.showSaveMsg = false;
       },
       getModifiedArticles: function() {
-        return this.ghBlog.articles.filter(o => o.changed);;
+        return this.curIndex.filter(o => o.removed || o.modified);
       },
     },
   });
@@ -255,7 +283,7 @@
         return this.article && this.article.source === undefined;
       },
       resetDisabled: function() {
-        return this.article && !this.article.resetable;
+        return this.article && !this.article.lastVersion;
       },
       strTags: {
         get: function() {
@@ -290,9 +318,19 @@
         this.$nextTick(() => this.$validator.validateAll());
       },
       reset: function() {
-        if(this.article && this.article.changed &&
-           confirm('Discard all modifications of this article?'))
-          this.article.reset();
+        if(this.article) {
+          if(this.article.modified &&
+            confirm('Discard all modifications of this article?'))
+            this.article.recover();
+          else if(this.article.removed)
+            this.article.removed = false;
+        }
+      },
+      remove: function() {
+        if(this.article) {
+          this.article.removed = true;
+          this.$emit('remove', this.article);
+        }
       },
       onInput: function(prop, value) {
         if(this.article)

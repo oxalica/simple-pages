@@ -22,6 +22,11 @@
   background-color: #f8f8f8;
 }
 
+.removed-mark {
+  text-decoration: line-through;
+  color: #f88;
+}
+
 .md-textarea {
   width: 100%;
   resize: none;
