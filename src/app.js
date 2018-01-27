@@ -236,16 +236,10 @@
           return;
 
         this.saving = true;
-
-        function marker(article) {
-          const source = article.source;
-          const match = /^([\s\S]*?)--+more--+([\s\S]*)$/.exec(source);
-          article.renderedBrief = match ? marked(match[1]) : '';
-          article.rendered = marked(match ? match[1] + match[2] : source);
-          return article;
-        }
+        const articleMarker =
+          article => Object.assign(article, this.marker(article.source));
         const newIndex = this.curIndex.filter(c => !c.removed);
-        this.ghBlog.saveArticles(this.curIndex, marker, 'Save')
+        this.ghBlog.saveArticles(this.curIndex, articleMarker, 'Save')
             .then(() => {
               this.showSaveMsg = true;
               newIndex.forEach(c => c.saveCurrent());
@@ -265,6 +259,26 @@
       getModifiedArticles: function() {
         return this.curIndex.filter(o => o.removed || o.modified);
       },
+      marker: function(source) {
+        const match = /^([\s\S]*?)--+more--+([\s\S]*)$/.exec(source);
+        const renderedBrief = match ? markWithMath(match[1]) : '';
+        const renderedRest = markWithMath(match ? match[2] : source);
+        return {
+          renderedBrief,
+          renderedRest,
+          rendered: renderedBrief + renderedRest,
+        };
+        function markWithMath(s) {
+          return marked(s)
+            .replace(/\\\\\(([\s\S]*?)\\\\\)/g, (_, inner) => {
+              try {
+                return katex.renderToString(inner);
+              } catch(e) {
+                return `<span style="color: red">&lt;${e.message}&gt;</span>`;
+              }
+            });
+        }
+      },
     },
   });
 
@@ -274,6 +288,7 @@
       article:  { default: null, validator: v => v === null || v instanceof Article },
       readonly: { type: Boolean, default: false },
       disabled: { type: Boolean, default: false },
+      marker:   { required: true },
     },
     computed: {
       isDisabled: function() {
@@ -345,6 +360,7 @@
       value: String,
       readonly: Boolean,
       disabled: Boolean,
+      marker: { required: true },
     },
     data: function() {
       return {
@@ -353,7 +369,7 @@
     },
     computed: {
       rendered: function() {
-        return marked(this.value || '');
+        return this.marker(this.value || '').rendered;
       },
     },
     watch: {

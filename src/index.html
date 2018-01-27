@@ -6,6 +6,7 @@
   <title>Simple Pages</title>
   <link rel="stylesheet" href="https://cdn.bootcss.com/bootstrap/3.3.7/css/bootstrap.css">
   <link rel="stylesheet" href="https://cdn.bootcss.com/font-awesome/4.7.0/css/font-awesome.css">
+  <link rel="stylesheet" href="https://cdn.bootcss.com/KaTeX/0.8.3/katex.min.css">
   <link rel="stylesheet" href="main.css">
   <script src="https://cdn.bootcss.com/vue/2.5.13/vue.js"></script>
   <script src="https://cdn.bootcss.com/vee-validate/2.0.3/vee-validate.js"></script>
@@ -14,6 +15,7 @@
   <script src="https://cdn.bootcss.com/marked/0.3.12/marked.js"></script>
   <script src="https://cdn.bootcss.com/mustache.js/2.3.0/mustache.js"></script>
   <script src="https://cdn.bootcss.com/github-api/3.0.0/GitHub.bundle.js"></script>
+  <script src="https://cdn.bootcss.com/KaTeX/0.8.3/katex.min.js"></script>
   <script src="gh_blog.js"></script>
 </head>
 
@@ -126,6 +128,7 @@
         <div class="col-xs-10 full-height">
           <article-editor
             class="full-height" :article="curArticle" :readonly="saving"
+            :marker="s => marker(s)"
             @remove="onRemove"
           ></article-editor>
         </div>
@@ -199,6 +202,7 @@
       <div class="col-xs-10 full-height">
         <md-editor
           class="full-height"
+          :marker="marker"
           :readonly="readonly" :disabled="isDisabled || sourceLoading"
           v-model="source"
         ></md-editor>
