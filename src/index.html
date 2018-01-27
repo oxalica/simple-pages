@@ -106,7 +106,7 @@
               <a href="#" @click="selectArticle(article)"
                 :class="{ 'removed-mark': article.removed }"
               >
-                {{ article.title || '&nbps;' }}
+                {{ article.title || '&nbsp;' }}
                 <span
                   v-if="article.removed || article.modified"
                   class="pull-right fa fa-pencil"
